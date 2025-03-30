@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    image: node:16-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=test
+      - LOG_LEVEL=info
+      - PATH=/app/node_modules/.bin:$PATH
+      - npm_config_loglevel=verbose
+    command: >
+      sh -c "npm install --verbose && ls -la node_modules/.bin && which jest && npx jest"
+    ports:
+      - "3000:3000"
+
+  dev:
+    image: node:16-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - PATH=/app/node_modules/.bin:$PATH
+      - npm_config_loglevel=verbose
+    command: >
+      sh -c "npm install --verbose && npm run setup:db && npm run start:dev"
+    ports:
+      - "3000:3000"
+
+volumes:
+  node_modules:

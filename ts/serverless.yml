@@ -1,0 +1,97 @@
+service: todo-service
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage, 'dev'}
+  region: ${env:AWS_REGION, 'us-east-1'}
+  memorySize: 256
+  timeout: 10
+  logRetentionInDays: 7
+  environment:
+    NODE_ENV: production
+    DYNAMODB_TABLE: ${env:DYNAMODB_TABLE, 'todos'}
+    LOG_LEVEL: info
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: !GetAtt TodosDynamoDBTable.Arn
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+package:
+  individually: true
+  excludeDevDependencies: true
+
+functions:
+  createTodo:
+    handler: src/lambda/index.createTodoHandler
+    events:
+      - http:
+          path: todos
+          method: post
+          cors: true
+  getTodo:
+    handler: src/lambda/index.getTodoHandler
+    events:
+      - http:
+          path: todos/{id}
+          method: get
+          cors: true
+  listTodos:
+    handler: src/lambda/index.listTodosHandler
+    events:
+      - http:
+          path: todos
+          method: get
+          cors: true
+  updateTodo:
+    handler: src/lambda/index.updateTodoHandler
+    events:
+      - http:
+          path: todos/{id}
+          method: put
+          cors: true
+  deleteTodo:
+    handler: src/lambda/index.deleteTodoHandler
+    events:
+      - http:
+          path: todos/{id}
+          method: delete
+          cors: true
+  root:
+    handler: src/lambda/index.rootHandler
+    events:
+      - http:
+          path: /
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    TodosDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${env:DYNAMODB_TABLE, 'todos'}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: false
