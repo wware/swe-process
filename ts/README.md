@@ -3545,9 +3545,14 @@ describe('DynamoStorage', () => {
         Key: expect.any(Object),
         UpdateExpression: 'SET title = :title, description = :description, #status = :status, updated_at = :updated_at',
         ExpressionAttributeNames: {
-          '#status': 'status'
+          '#status': 'status' // 'status' is a reserved word in DynamoDB
         },
-        ExpressionAttributeValues: expect.any(Object),
+        ExpressionAttributeValues: marshall({
+          ':title': updatedItem.title,
+          ':description': updatedItem.description,
+          ':status': updatedItem.status,
+          ':updated_at': formatIsoDate(updatedItem.updatedAt)
+        }),
         ReturnValues: 'ALL_NEW'
       });
       
@@ -4363,6 +4368,66 @@ Tests are designed to be independent and idempotent, so they can be run in any o
 ### License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Docker Development Environment
+
+We use Docker Compose to manage the development environment. Here are the key commands:
+
+### Basic Commands
+
+```bash
+# Start the development environment
+docker compose up
+
+# Stop all services
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Rebuild containers (needed after dependency changes)
+docker compose build
+```
+
+### Testing Commands
+
+```bash
+# Run all tests
+docker compose run --rm test
+
+# Run tests in watch mode
+docker compose run --rm test-watch
+
+# Run specific test file
+docker compose run --rm test test/unit/services/todo-service.test.ts
+
+# Run integration tests
+docker compose run --rm test-integration
+```
+
+### Development Workflow
+
+1. Start the environment: `docker compose up`
+2. Make code changes - the TypeScript compiler will watch for changes
+3. Run tests in watch mode in a separate terminal: `docker compose run --rm test-watch`
+4. When adding new dependencies:
+   - Add them to package.json
+   - Run `docker compose build` to rebuild the containers
+   - Restart the environment
+
+### Container Structure
+
+- `app`: Main application container running the API
+- `test`: Container for running tests
+- `test-watch`: Container for running tests in watch mode
+- `db`: SQLite database container (for local development)
+
+The containers share a volume for the source code, ensuring that changes are immediately reflected in all containers.
+
+### Environment Variables
+
+The development environment uses environment variables defined in `.env`. See `.env.example` for the required variables.
+```
 </details>
 
 ---
