@@ -12,6 +12,8 @@ import {
 import { Status } from '../core/types';
 import { validateTodoTitle, validateTodoDescription, validateUuid } from '../utils/validation';
 import { logger } from '../utils/logging';
+import { NotFoundError, ValidationError } from '../core/errors';
+import { MemoryStorage } from '../storage/memory-storage';
 
 // Create a DynamoDB storage instance for production
 const dynamoConfig = (config as any).aws?.dynamoDb;
@@ -23,10 +25,62 @@ const storage = new DynamoStorage(
 // Create a TodoService instance using the DynamoDB storage
 const todoService = new TodoService(storage);
 
+// Initialize the service with a storage implementation
+export let todoServiceMemory = new TodoService(new MemoryStorage());
+
+// Error handling wrapper with debugging
+const errorHandler = (handler: (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>) => {
+  return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    try {
+      const result = await handler(event);
+      console.log('Handler result:', result);
+      return result;
+    } catch (err) {
+      // Type guard for Error objects
+      const error = err as Error;
+      console.error('Error handling request:', error);
+      console.error('Stack trace:', error.stack);
+
+      if (error instanceof NotFoundError) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({
+            success: false,
+            error: error.message
+          })
+        };
+      }
+
+      if (error instanceof ValidationError) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            success: false,
+            error: error.message
+          })
+        };
+      }
+
+      // Default error response with more details in development
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          error: 'Internal server error',
+          details: process.env.NODE_ENV === 'development' ? {
+            message: error.message,
+            stack: error.stack
+          } : undefined
+        })
+      };
+    }
+  };
+};
+
 /**
  * Handler for creating a new todo item
  */
-export const createTodoHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const createTodoHandler = errorHandler(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Parse the request body
   const requestBody = parseRequestBody<{ title: string; description: string }>(event);
   
@@ -50,35 +104,43 @@ export const createTodoHandler = withErrorHandling(async (event: APIGatewayProxy
 /**
  * Handler for retrieving a todo item by its ID
  */
-export const getTodoHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Get the todo ID from the path parameters
-  const id = getPathParameter(event, 'id');
-  
-  // Validate the todo ID
-  validateUuid(id);
-  
-  // Get the todo item
-  const todoItem = await todoService.getTodo(id);
-  
-  // Return a success response
-  return createSuccessResponse(todoItem);
+export const getTodoHandler = errorHandler(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const id = event.pathParameters?.id;
+  if (!id) {
+    throw new ValidationError('Todo ID is required');
+  }
+
+  const todo = await todoService.getTodo(id);
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      success: true,
+      data: todo
+    })
+  };
 });
 
 /**
  * Handler for listing all todo items
  */
-export const listTodosHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // List all todo items
-  const todoItems = await todoService.listTodos();
-  
-  // Return a success response
-  return createSuccessResponse(todoItems);
+export const listTodosHandler = errorHandler(async (_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  console.log('Listing todos...');
+  console.log('Storage state:', storage); // Debug log
+  const todos = await todoService.listTodos();
+  console.log('Got todos:', todos);
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      success: true,
+      data: todos
+    })
+  };
 });
 
 /**
  * Handler for updating a todo item
  */
-export const updateTodoHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const updateTodoHandler = errorHandler(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Get the todo ID from the path parameters
   const id = getPathParameter(event, 'id');
   
@@ -112,7 +174,7 @@ export const updateTodoHandler = withErrorHandling(async (event: APIGatewayProxy
 /**
  * Handler for deleting a todo item
  */
-export const deleteTodoHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const deleteTodoHandler = errorHandler(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Get the todo ID from the path parameters
   const id = getPathParameter(event, 'id');
   
@@ -129,16 +191,9 @@ export const deleteTodoHandler = withErrorHandling(async (event: APIGatewayProxy
 /**
  * Handler for the root path
  */
-export const rootHandler = withErrorHandling(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  return createSuccessResponse({ 
-    message: 'Todo API is running',
-    version: '1.0.0',
-    endpoints: [
-      { method: 'GET', path: '/todos', description: 'List all todo items' },
-      { method: 'POST', path: '/todos', description: 'Create a new todo item' },
-      { method: 'GET', path: '/todos/{id}', description: 'Get a todo item by ID' },
-      { method: 'PUT', path: '/todos/{id}', description: 'Update a todo item' },
-      { method: 'DELETE', path: '/todos/{id}', description: 'Delete a todo item' }
-    ]
-  });
+export const rootHandler = errorHandler(async (_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Todo API is running' })
+  };
 });

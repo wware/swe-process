@@ -20,6 +20,11 @@ AI-assisted software design and development. What follows in my
 attempt to come up with a process that produces bulletproof,
 trustworthy designs and code.
 
+The LLM is great at generating code quickly, but it can hallucinate
+and make mistakes, so I want a process that minimizes bugs and errors
+while letting the LLM play to its strength. This is a work in process,
+and I'm not yet at the final answer.
+
 When one starts using AI assistance, the language model very quickly
 produces a large, complex design. A detailed review of the design
 would take a long time, much longer than it took to generate the
@@ -30,8 +35,6 @@ The AI can help write the tests, and then the code can be written to
 pass the tests. Reviewing the tests would hopefully be more intuitive
 and straightforward than reviewing the functional design. Passing the
 tests would give confidence that the design is correct.
-
-This is a work in process, and I'm not yet at the final answer.
 
 What I'm doing right now is that I give the LLM a natural language
 description of the system I want to build. I then ask it to generate
@@ -56,7 +59,6 @@ that tests should be
 - well-documented
 - easy to understand
 - independent of one another (can run in any order)
-- idempotent
 - fast to run
 
 Review of the tests needs to be done more carefully. These are going
@@ -64,18 +66,30 @@ to be the safety net for my on-going development efforts. They will
 also become the documentation for the system. They should provide usage
 examples that could be the beginning of a quickstart guide.
 
-The LLM is great at generating code quickly, but it may make mistakes,
-so I want a process that (a) steers the LLM in the direction of correct
-code, and (b) detects errors with high confidence.
+Having reviewed the tests and generated a functional implementation that
+passes the tests, I can now ask the LLM to clean up the code to make it
+easier to review and more maintainable in general. Something like this
+appears to work well in Cursor IDE:
+
+> I want to go thru all the functional and test code, and make sure it's
+> all super easy for a human to review. Ample comments, make sure
+> everything is clear, and point out any duplications or other bad
+> code smells or architectural flaws.
 
 ## What is SysML?
 
-SysML (Systems Modeling Language) is a precise modeling language for systems engineering that can be expressed in both graphical and textual forms. In its textual format, SysML v2 uses a straightforward syntax to describe:
+SysML (Systems Modeling Language) is a precise modeling language for
+systems engineering that can be expressed in both graphical and textual
+forms. In its textual format, SysML v2 uses a straightforward syntax to
+describe:
 
 - System structure (parts and how they connect)
 - System behavior (actions and flows)
 - Requirements (what the system must do)
 - Parametric constraints (mathematical relationships)
+
+SysML is agnostic to what programming language is used to implement
+the system.
 
 Here's a simple example of textual SysML describing a coffee maker:
 

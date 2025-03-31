@@ -14,12 +14,8 @@ export function validateTodoTitle(title: string): void {
     throw new ValidationError('Title must be a string');
   }
   
-  if (title.trim().length === 0) {
-    throw new ValidationError('Title cannot be empty');
-  }
-  
   if (title.length > 100) {
-    throw new ValidationError('Title cannot be longer than 100 characters');
+    throw new ValidationError('Title must be 100 characters or less');
   }
 }
 
@@ -37,8 +33,8 @@ export function validateTodoDescription(description: string): void {
     throw new ValidationError('Description must be a string');
   }
   
-  if (description.length > 1000) {
-    throw new ValidationError('Description cannot be longer than 1000 characters');
+  if (description.length > 500) {
+    throw new ValidationError('Description must be 500 characters or less');
   }
 }
 

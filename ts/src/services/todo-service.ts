@@ -3,6 +3,7 @@ import { ITodoService, TodoStorage } from '../core/interfaces';
 import { NotFoundError, ValidationError } from '../core/errors';
 import { validateTodoTitle, validateTodoDescription } from '../utils/validation';
 import { logger } from '../utils/logging';
+import { MemoryStorage } from '../storage/memory-storage';
 
 /**
  * Implementation of the TodoService as defined in the SysML specification
@@ -119,3 +120,6 @@ export class TodoService implements ITodoService {
     logger.info(`Todo with id ${id} deleted`);
   }
 }
+
+// Create and export a default instance
+export const todoService = new TodoService(new MemoryStorage());
