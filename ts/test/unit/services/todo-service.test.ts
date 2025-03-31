@@ -1,42 +1,55 @@
 import { TodoService } from '../../../src/services/todo-service';
-import { MemoryStorage } from '../../../src/storage/memory-storage';
+import { TodoStorage } from '../../../src/core/interfaces';
 import { Status } from '../../../src/core/types';
 import { NotFoundError, ValidationError } from '../../../src/core/errors';
+import { createTestTodo } from '../../test-utils';
+import { TodoItem, TodoItemUpdates } from '../../../src/core/types';
 
 describe('TodoService', () => {
   let todoService: TodoService;
-  let memoryStorage: MemoryStorage;
+  let mockStorage: jest.Mocked<TodoStorage>;
 
   // Shared test data
   const testTitle = 'Test Todo';
   const testDescription = 'This is a test todo item';
   
-  beforeEach(async () => {
-    // Create a fresh MemoryStorage instance for each test
-    memoryStorage = new MemoryStorage();
+  beforeEach(() => {
+    // Create a mock storage for each test
+    mockStorage = {
+      createTodo: jest.fn(),
+      getTodo: jest.fn(),
+      listTodos: jest.fn(),
+      updateTodo: jest.fn(),
+      deleteTodo: jest.fn()
+    };
     
-    // Create a TodoService instance with the MemoryStorage
-    todoService = new TodoService(memoryStorage);
-  });
-
-  afterEach(async () => {
-    // Clear all todos from the storage after each test
-    await memoryStorage.clear();
+    // Create a TodoService instance with the mock storage
+    todoService = new TodoService(mockStorage);
   });
 
   describe('addTodo', () => {
     it('should create a new todo item with the given title and description', async () => {
+      // Arrange
+      const expectedTodo = {
+        id: expect.any(String),
+        title: testTitle,
+        description: testDescription,
+        status: Status.PENDING,
+        createdAt: expect.any(Date),
+        updatedAt: expect.any(Date)
+      };
+      mockStorage.createTodo.mockResolvedValueOnce(expectedTodo);
+
       // Act
       const result = await todoService.addTodo(testTitle, testDescription);
 
       // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBeDefined();
-      expect(result.title).toBe(testTitle);
-      expect(result.description).toBe(testDescription);
-      expect(result.status).toBe(Status.PENDING);
-      expect(result.createdAt).toBeInstanceOf(Date);
-      expect(result.updatedAt).toBeInstanceOf(Date);
+      expect(result).toMatchObject(expectedTodo);
+      expect(mockStorage.createTodo).toHaveBeenCalledWith(expect.objectContaining({
+        title: testTitle,
+        description: testDescription,
+        status: Status.PENDING
+      }));
     });
 
     it('should throw ValidationError when title is empty', async () => {
@@ -130,41 +143,51 @@ describe('TodoService', () => {
   });
 
   describe('updateTodo', () => {
-    it('should update the status of the todo item with the given ID', async () => {
+    it('should update a todo item', async () => {
       // Arrange
-      const createdTodo = await todoService.addTodo(testTitle, testDescription);
-      
+      const existingTodo = createTestTodo();
+      const updates: TodoItemUpdates = {
+        title: 'Updated Title',
+        description: 'Updated Description',
+        status: Status.IN_PROGRESS
+      };
+      const expectedTodo = { ...existingTodo, ...updates };
+      mockStorage.updateTodo.mockResolvedValueOnce(expectedTodo);
+
       // Act
-      const result = await todoService.updateTodo(createdTodo.id, Status.IN_PROGRESS);
+      const result = await todoService.updateTodo(existingTodo.id, updates);
 
       // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBe(createdTodo.id);
-      expect(result.title).toBe(testTitle);
-      expect(result.description).toBe(testDescription);
-      expect(result.status).toBe(Status.IN_PROGRESS);
-      expect(result.updatedAt).toBeInstanceOf(Date);
-      expect(result.updatedAt.getTime()).toBeGreaterThanOrEqual(createdTodo.updatedAt.getTime());
+      expect(result).toEqual(expectedTodo);
+      expect(mockStorage.updateTodo).toHaveBeenCalledWith(existingTodo.id, updates);
     });
 
-    it('should throw ValidationError when status is invalid', async () => {
-      // Arrange
-      const createdTodo = await todoService.addTodo(testTitle, testDescription);
-      
-      // Act & Assert
-      await expect(todoService.updateTodo(createdTodo.id, 'INVALID_STATUS' as Status))
-        .rejects
-        .toThrow(ValidationError);
+    it('should throw ValidationError when title is empty', async () => {
+      const updates: TodoItemUpdates = {
+        title: ''  // Invalid empty title
+      };
+
+      await expect(todoService.updateTodo('some-id', updates))
+        .rejects.toThrow(ValidationError);
     });
 
-    it('should throw NotFoundError when todo item with the given ID does not exist', async () => {
-      // Arrange
+    it('should throw ValidationError for invalid status', async () => {
+      const updates: TodoItemUpdates = {
+        status: 'INVALID_STATUS' as Status
+      };
+
+      await expect(todoService.updateTodo('some-id', updates))
+        .rejects.toThrow(ValidationError);
+    });
+
+    it('should throw NotFoundError when todo item does not exist', async () => {
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
+      const updates: TodoItemUpdates = {
+        status: Status.IN_PROGRESS
+      };
 
-      // Act & Assert
-      await expect(todoService.updateTodo(nonExistentId, Status.IN_PROGRESS))
-        .rejects
-        .toThrow(NotFoundError);
+      await expect(todoService.updateTodo(nonExistentId, updates))
+        .rejects.toThrow(NotFoundError);
     });
   });
 

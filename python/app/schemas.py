@@ -6,6 +6,10 @@ from sqlalchemy.dialects.sqlite import BLOB
 import sqlite3
 import uuid
 from pydantic import BaseModel, Field
+from typing import Optional
+from uuid import UUID
+
+from .models import Status
 
 Base = declarative_base()
 
@@ -36,5 +40,20 @@ sqlite3.register_converter("UUID", _uuid_converter)
 
 
 class TodoCreate(BaseModel):
-    title: str = Field(..., min_length=1)  # Requires non-empty string
-    description: str = Field(...)  # Makes description required (no default value)
+    title: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(..., min_length=1)
+
+
+class TodoUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, min_length=1)
+    status: Optional[Status] = None
+
+
+class TodoResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str
+    status: Status
+    created_at: datetime
+    updated_at: datetime

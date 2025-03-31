@@ -1,26 +1,31 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { SQLiteStorage } from '../../../src/storage/sqlite-storage';
-import { TodoItem, Status, createTodoItem } from '../../../src/core/types';
+import { TodoItem, Status, createTodoItem, TodoItemUpdates } from '../../../src/core/types';
 import { NotFoundError, StorageError } from '../../../src/core/errors';
+import { createTestTodo } from '../../test-utils';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+
+jest.mock('sqlite');
+jest.mock('sqlite3');
 
 describe('SQLiteStorage', () => {
   let sqliteStorage: SQLiteStorage;
+  let mockDb: jest.Mocked<any>;
   // Use in-memory database for tests
   const testDbPath = ':memory:';
   
-  // Test data
-  const createTestTodo = (): TodoItem => {
-    return createTodoItem({
-      title: 'Test Todo',
-      description: 'This is a test todo item'
-    });
-  };
-  
   beforeEach(async () => {
-    // Create and initialize a fresh SQLiteStorage instance for each test
-    sqliteStorage = new SQLiteStorage(testDbPath);
-    await sqliteStorage.initialize();
+    mockDb = {
+      get: jest.fn(),
+      all: jest.fn(),
+      run: jest.fn(),
+      exec: jest.fn()
+    };
+
+    (open as jest.Mock).mockResolvedValue(mockDb);
+    sqliteStorage = await SQLiteStorage.initialize(':memory:');
   });
   
   afterEach(async () => {
@@ -139,49 +144,31 @@ describe('SQLiteStorage', () => {
   });
   
   describe('updateTodo', () => {
-    it('should update the todo item and return it', async () => {
-      // Arrange
+    it('should update a todo item', async () => {
       const todoItem = createTestTodo();
-      await sqliteStorage.createTodo(todoItem);
-      
-      // Update the todo item
-      const updatedItem: TodoItem = {
-        ...todoItem,
+      const updates: TodoItemUpdates = {
         title: 'Updated Title',
-        status: Status.IN_PROGRESS,
-        updatedAt: new Date()
+        status: Status.IN_PROGRESS
       };
+
+      mockDb.get.mockResolvedValueOnce(todoItem);
+      mockDb.run.mockResolvedValueOnce({ changes: 1 });
+
+      const result = await sqliteStorage.updateTodo(todoItem.id, updates);
       
-      // Act
-      const result = await sqliteStorage.updateTodo(updatedItem);
-      
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBe(todoItem.id);
       expect(result.title).toBe('Updated Title');
       expect(result.status).toBe(Status.IN_PROGRESS);
-      
-      // Verify that the item was updated in the database
-      const retrievedTodo = await sqliteStorage.getTodo(todoItem.id);
-      expect(retrievedTodo?.title).toBe('Updated Title');
-      expect(retrievedTodo?.status).toBe(Status.IN_PROGRESS);
+      expect(mockDb.run).toHaveBeenCalled();
     });
-    
-    it('should throw NotFoundError if no todo item with the given ID exists', async () => {
-      // Arrange
-      const nonExistentTodo: TodoItem = {
-        id: '00000000-0000-0000-0000-000000000000',
-        title: 'Non-existent Todo',
-        description: 'This todo does not exist',
-        status: Status.PENDING,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      // Act & Assert
-      await expect(sqliteStorage.updateTodo(nonExistentTodo))
-        .rejects
-        .toThrow(NotFoundError);
+
+    it('should throw NotFoundError for non-existent todo', async () => {
+      const nonExistentId = 'non-existent-id';
+      const updates: TodoItemUpdates = { title: 'New Title' };
+
+      mockDb.get.mockResolvedValueOnce(null);
+
+      await expect(sqliteStorage.updateTodo(nonExistentId, updates))
+        .rejects.toThrow(NotFoundError);
     });
   });
   

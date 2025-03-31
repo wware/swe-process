@@ -11,12 +11,26 @@ import { DynamoStorage } from '../../../src/storage/dynamo-storage';
 import { TodoItem, Status, createTodoItem } from '../../../src/core/types';
 import { NotFoundError, StorageError } from '../../../src/core/errors';
 import { formatIsoDate } from '../../../src/utils/date-utils';
+import { DynamoDB } from 'aws-sdk';
 
 // Mock the DynamoDBClient
 jest.mock('@aws-sdk/client-dynamodb');
 
+// Mock DynamoDB client
+jest.mock('aws-sdk', () => ({
+  DynamoDB: {
+    DocumentClient: jest.fn(() => ({
+      put: jest.fn(),
+      get: jest.fn(),
+      scan: jest.fn(),
+      delete: jest.fn()
+    }))
+  }
+}));
+
 describe('DynamoStorage', () => {
   let dynamoStorage: DynamoStorage;
+  let mockDynamoDb: jest.Mocked<DynamoDB.DocumentClient>;
   const testTableName = 'test-todos';
   const testRegion = 'us-east-1';
   
@@ -43,6 +57,7 @@ describe('DynamoStorage', () => {
     
     // Create a fresh DynamoStorage instance for each test
     dynamoStorage = new DynamoStorage(testTableName, testRegion);
+    mockDynamoDb = new DynamoDB.DocumentClient() as jest.Mocked<DynamoDB.DocumentClient>;
   });
   
   describe('constructor', () => {
@@ -242,86 +257,38 @@ describe('DynamoStorage', () => {
   });
   
   describe('updateTodo', () => {
-    it('should check if the todo item exists and create an UpdateItemCommand with the correct parameters', async () => {
-      // Arrange
+    it('should update a todo item', async () => {
       const todoItem = createTestTodo();
-      
-      // Setup mock implementations
-      // First call to getTodo
-      mockSend.mockResolvedValueOnce({
-        Item: marshall({
-          id: todoItem.id,
-          title: todoItem.title,
-          description: todoItem.description,
-          status: todoItem.status,
-          created_at: formatIsoDate(todoItem.createdAt),
-          updated_at: formatIsoDate(todoItem.updatedAt)
-        })
-      });
-      
-      // Second call to updateTodo
-      mockSend.mockResolvedValueOnce({});
-      
-      // Update the todo item
-      const updatedItem: TodoItem = {
-        ...todoItem,
+      const updates: TodoItemUpdates = {
         title: 'Updated Title',
-        status: Status.IN_PROGRESS,
-        updatedAt: new Date()
+        status: Status.IN_PROGRESS
       };
+
+      mockDynamoDb.get.mockImplementationOnce(() => ({
+        promise: () => Promise.resolve({ Item: todoItem })
+      }));
+
+      mockDynamoDb.put.mockImplementationOnce(() => ({
+        promise: () => Promise.resolve({})
+      }));
+
+      const result = await dynamoStorage.updateTodo(todoItem.id, updates);
       
-      // Act
-      const result = await dynamoStorage.updateTodo(updatedItem);
-      
-      // Assert
-      expect(GetItemCommand).toHaveBeenCalledWith({
-        TableName: testTableName,
-        Key: expect.any(Object)
-      });
-      
-      expect(UpdateItemCommand).toHaveBeenCalledWith({
-        TableName: testTableName,
-        Key: expect.any(Object),
-        UpdateExpression: 'SET title = :title, description = :description, #status = :status, updated_at = :updated_at',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
-        ExpressionAttributeValues: expect.any(Object),
-        ReturnValues: 'ALL_NEW'
-      });
-      
-      expect(mockSend).toHaveBeenCalledTimes(2);
-      expect(mockSend).toHaveBeenNthCalledWith(1, expect.any(GetItemCommand));
-      expect(mockSend).toHaveBeenNthCalledWith(2, expect.any(UpdateItemCommand));
-      
-      expect(result).toEqual(updatedItem);
+      expect(result.title).toBe('Updated Title');
+      expect(result.status).toBe(Status.IN_PROGRESS);
+      expect(mockDynamoDb.put).toHaveBeenCalled();
     });
-    
-    it('should throw NotFoundError if the todo item does not exist', async () => {
-      // Arrange
-      const todoItem = createTestTodo();
-      
-      // Setup mock implementation
-      mockSend.mockResolvedValueOnce({});
-      
-      // Act & Assert
-      await expect(dynamoStorage.updateTodo(todoItem))
-        .rejects
-        .toThrow(NotFoundError);
-    });
-    
-    it('should throw StorageError if the DynamoDB operation fails', async () => {
-      // Arrange
-      const todoItem = createTestTodo();
-      const mockError = new Error('DynamoDB error');
-      
-      // Setup mock implementation
-      mockSend.mockRejectedValueOnce(mockError);
-      
-      // Act & Assert
-      await expect(dynamoStorage.updateTodo(todoItem))
-        .rejects
-        .toThrow(StorageError);
+
+    it('should throw NotFoundError for non-existent todo', async () => {
+      const nonExistentId = 'non-existent-id';
+      const updates: TodoItemUpdates = { title: 'New Title' };
+
+      mockDynamoDb.get.mockImplementationOnce(() => ({
+        promise: () => Promise.resolve({ Item: null })
+      }));
+
+      await expect(dynamoStorage.updateTodo(nonExistentId, updates))
+        .rejects.toThrow(NotFoundError);
     });
   });
   

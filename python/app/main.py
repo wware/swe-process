@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.models import TodoItem, TodoItemUpdate
 from app.service import TodoService
 from app.storage.sqlite import SQLiteTodoStorage
-from .schemas import TodoCreate
+from .schemas import TodoCreate, TodoUpdate, TodoResponse
 
 
 # Create FastAPI app
@@ -43,50 +43,38 @@ async def startup():
     await storage.initialize()
 
 
-@app.post("/todos", response_model=TodoItem, status_code=201)
-async def create_todo(
-    todo: TodoCreate, 
-    service: TodoService = Depends(get_todo_service)
-):
-    """Create a new todo item"""
-    return await service.add_todo(todo.title, todo.description)
+@app.post("/todos", response_model=TodoResponse, status_code=201)
+async def create_todo(todo: TodoCreate):
+    return await todo_service.add_todo(todo.title, todo.description)
 
 
-@app.get("/todos", response_model=List[TodoItem])
-async def list_todos(service: TodoService = Depends(get_todo_service)):
-    """List all todo items"""
-    return await service.list_todos()
+@app.get("/todos", response_model=list[TodoResponse])
+async def list_todos():
+    return await todo_service.list_todos()
 
 
-@app.get("/todos/{todo_id}", response_model=TodoItem)
-async def get_todo(todo_id: UUID, service: TodoService = Depends(get_todo_service)):
-    """Get a todo item by ID"""
+@app.get("/todos/{todo_id}", response_model=TodoResponse)
+async def get_todo(todo_id: UUID):
     try:
-        return await service.get_todo(todo_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Todo item not found")
+        return await todo_service.get_todo(todo_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.put("/todos/{todo_id}", response_model=TodoItem)
-async def update_todo(
-    todo_id: UUID,
-    todo_update: TodoItemUpdate,
-    service: TodoService = Depends(get_todo_service),
-):
-    """Update a todo item's status"""
+@app.patch("/todos/{todo_id}", response_model=TodoResponse)
+async def update_todo(todo_id: UUID, updates: TodoUpdate):
     try:
-        return await service.update_todo(todo_id, todo_update.status)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Todo item not found")
+        return await todo_service.update_todo(todo_id, TodoItemUpdates(**updates.dict(exclude_unset=True)))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.delete("/todos/{todo_id}", status_code=204)
-async def delete_todo(todo_id: UUID, service: TodoService = Depends(get_todo_service)):
-    """Delete a todo item"""
+async def delete_todo(todo_id: UUID):
     try:
-        await service.delete_todo(todo_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Todo item not found")
+        await todo_service.delete_todo(todo_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 if __name__ == "__main__":

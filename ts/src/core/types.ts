@@ -107,3 +107,9 @@ export interface TodoStorage {
   createTodos(items: TodoItem[]): Promise<TodoItem[]>;
   deleteTodos(ids: string[]): Promise<void>;
 }
+
+export interface TodoItemUpdates {
+  title?: string;
+  description?: string;
+  status?: Status;
+}

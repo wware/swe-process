@@ -9,7 +9,7 @@ import {
   getPathParameter, 
   withErrorHandling
 } from './api-gateway';
-import { Status } from '../core/types';
+import { Status, TodoItemUpdates } from '../core/types';
 import { validateTodoTitle, validateTodoDescription, validateUuid } from '../utils/validation';
 import { logger } from '../utils/logging';
 import { NotFoundError, ValidationError } from '../core/errors';
@@ -141,33 +141,28 @@ export const listTodosHandler = errorHandler(async (_event: APIGatewayProxyEvent
  * Handler for updating a todo item
  */
 export const updateTodoHandler = errorHandler(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Get the todo ID from the path parameters
   const id = getPathParameter(event, 'id');
-  
-  // Validate the todo ID
   validateUuid(id);
   
-  // Parse the request body
-  const requestBody = parseRequestBody<{ status: string }>(event);
-  
-  if (!requestBody) {
-    return createErrorResponse(new Error('Missing request body'), 400);
+  const updates = parseRequestBody<TodoItemUpdates>(event);
+  if (!updates) {
+    throw new ValidationError('Missing request body');
   }
   
-  const { status } = requestBody;
-  
-  // Validate the status
-  if (!Object.values(Status).includes(status as Status)) {
-    return createErrorResponse(
-      new Error(`Invalid status: ${status}. Valid values are: ${Object.values(Status).join(', ')}`), 
-      400
+  // Validate updates if present
+  if (updates.title) {
+    validateTodoTitle(updates.title);
+  }
+  if (updates.description) {
+    validateTodoDescription(updates.description);
+  }
+  if (updates.status && !Object.values(Status).includes(updates.status)) {
+    throw new ValidationError(
+      `Invalid status: ${updates.status}. Valid values are: ${Object.values(Status).join(', ')}`
     );
   }
   
-  // Update the todo item
-  const todoItem = await todoService.updateTodo(id, status);
-  
-  // Return a success response
+  const todoItem = await todoService.updateTodo(id, updates);
   return createSuccessResponse(todoItem);
 });
 

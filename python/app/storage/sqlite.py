@@ -1,107 +1,93 @@
 from datetime import datetime
 from typing import List
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.future import select
-from sqlalchemy.orm import sessionmaker
+import aiosqlite
 
-from app.models import TodoItem, Status
+from app.models import TodoItem, Status, TodoItemUpdates
 from app.schemas import TodoItemSchema, Base
 from app.storage.base import TodoStorage
 
 
-class SQLiteTodoStorage(TodoStorage):
+class SqliteStorage(TodoStorage):
     """SQLite implementation of TodoStorage"""
 
-    def __init__(self, database_url: str):
-        self.engine = create_async_engine(database_url)
-        self.async_session = sessionmaker(
-            self.engine, class_=AsyncSession, expire_on_commit=False
-        )
-
-    async def initialize(self):
-        """Initialize the database by creating tables"""
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    def __init__(self, db_path: str):
+        self.db_path = db_path
 
     async def create_todo(self, item: TodoItem) -> TodoItem:
         """Create a new TodoItem in storage"""
-        db_item = TodoItemSchema(
-            id=str(item.id),
-            title=item.title,
-            description=item.description,
-            status=item.status.value,
-            created_at=item.created_at,
-            updated_at=item.updated_at
-        )
-
-        async with self.async_session() as session:
-            session.add(db_item)
-            await session.commit()
-            await session.refresh(db_item)
-
-        return self._schema_to_model(db_item)
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO todos (id, title, description, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (str(item.id), item.title, item.description, item.status.value,
+                 item.created_at.isoformat(), item.updated_at.isoformat())
+            )
+            await db.commit()
+            return item
 
     async def get_todo(self, id: UUID) -> TodoItem:
         """Get a TodoItem by ID"""
-        async with self.async_session() as session:
-            result = await session.execute(
-                select(TodoItemSchema).where(TodoItemSchema.id == str(id))
-            )
-            db_item = result.scalars().first()
-            if db_item is None:
-                raise KeyError(f"TodoItem with ID {id} not found")
-
-        return self._schema_to_model(db_item)
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM todos WHERE id = ?", (str(id),)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row is None:
+                    raise KeyError(f"Todo with id {id} not found")
+                return self._row_to_todo(row)
 
     async def list_todos(self) -> List[TodoItem]:
         """List all TodoItems"""
-        async with self.async_session() as session:
-            result = await session.execute(select(TodoItemSchema))
-            db_items = result.scalars().all()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("SELECT * FROM todos") as cursor:
+                rows = await cursor.fetchall()
+                return [self._row_to_todo(row) for row in rows]
 
-        return [self._schema_to_model(db_item) for db_item in db_items]
-
-    async def update_todo(self, item: TodoItem) -> TodoItem:
+    async def update_todo(self, id: UUID, updates: TodoItemUpdates) -> TodoItem:
         """Update a TodoItem"""
-        async with self.async_session() as session:
-            result = await session.execute(
-                select(TodoItemSchema).where(TodoItemSchema.id == str(item.id))
+        async with aiosqlite.connect(self.db_path) as db:
+            # First get the existing todo
+            todo = await self.get_todo(id)
+            
+            # Apply updates
+            if updates.title is not None:
+                todo.title = updates.title
+            if updates.description is not None:
+                todo.description = updates.description
+            if updates.status is not None:
+                todo.status = updates.status
+            
+            todo.updated_at = datetime.utcnow()
+
+            # Save updates
+            await db.execute(
+                """
+                UPDATE todos 
+                SET title = ?, description = ?, status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (todo.title, todo.description, todo.status.value,
+                 todo.updated_at.isoformat(), str(id))
             )
-            db_item = result.scalars().first()
-            if db_item is None:
-                raise KeyError(f"TodoItem with ID {item.id} not found")
-
-            # Update fields
-            db_item.status = item.status.value
-            db_item.updated_at = datetime.utcnow()
-
-            await session.commit()
-            await session.refresh(db_item)
-
-        return self._schema_to_model(db_item)
+            await db.commit()
+            return todo
 
     async def delete_todo(self, id: UUID) -> None:
         """Delete a TodoItem by ID"""
-        async with self.async_session() as session:
-            result = await session.execute(
-                select(TodoItemSchema).where(TodoItemSchema.id == str(id))
-            )
-            db_item = result.scalars().first()
-            if db_item is None:
-                raise KeyError(f"TodoItem with ID {id} not found")
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM todos WHERE id = ?", (str(id),))
+            await db.commit()
 
-            await session.delete(db_item)
-            await session.commit()
-
-    @staticmethod
-    def _schema_to_model(schema: TodoItemSchema) -> TodoItem:
-        """Convert TodoItemSchema to TodoItem"""
+    def _row_to_todo(self, row) -> TodoItem:
+        """Convert row to TodoItem"""
         return TodoItem(
-            id=UUID(schema.id),
-            title=schema.title,
-            description=schema.description,
-            status=Status(schema.status),
-            created_at=schema.created_at,
-            updated_at=schema.updated_at
+            id=UUID(row[0]),
+            title=row[1],
+            description=row[2],
+            status=Status(row[3]),
+            created_at=datetime.fromisoformat(row[4]),
+            updated_at=datetime.fromisoformat(row[5])
         )

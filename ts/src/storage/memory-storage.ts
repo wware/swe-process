@@ -1,4 +1,4 @@
-import { TodoItem } from '../core/types';
+import { TodoItem, TodoItemUpdates } from '../core/types';
 import { TodoStorage } from '../core/interfaces';
 import { NotFoundError } from '../core/errors';
 import { logger } from '../utils/logging';
@@ -53,19 +53,22 @@ export class MemoryStorage implements TodoStorage {
 
   /**
    * Updates a todo item
-   * @param item The todo item to update
+   * @param id The ID of the todo item to update
+   * @param updates The updates to apply to the todo item
    * @returns The updated todo item
    * @throws NotFoundError if the todo item is not found
    */
-  async updateTodo(id: string, item: Partial<TodoItem>): Promise<TodoItem> {
+  async updateTodo(id: string, updates: TodoItemUpdates): Promise<TodoItem> {
     const index = this.todos.findIndex(t => t.id === id);
     if (index === -1) {
       throw new NotFoundError(`Todo with id ${id} not found`);
     }
     
+    const existingTodo = this.todos[index];
     const updatedTodo = {
-      ...this.todos[index],
-      ...this.deepClone(item)
+      ...existingTodo,
+      ...updates,
+      updatedAt: new Date()
     };
     
     this.todos[index] = updatedTodo;

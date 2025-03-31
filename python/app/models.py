@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from uuid import UUID, uuid4
-from pydantic import BaseModel, Field
+from typing import Optional
+from uuid import UUID
 
 
 class Status(str, Enum):
@@ -11,28 +12,20 @@ class Status(str, Enum):
     COMPLETED = "COMPLETED"
 
 
-class TodoItemBase(BaseModel):
-    """Base model for TodoItem"""
+@dataclass
+class TodoItem:
+    """TodoItem model corresponding to SysML TodoItem part def"""
+    id: UUID
     title: str
     description: str
-
-
-class TodoItemCreate(TodoItemBase):
-    """Model for creating TodoItem"""
-    pass
-
-
-class TodoItemUpdate(BaseModel):
-    """Model for updating TodoItem"""
     status: Status
+    created_at: datetime
+    updated_at: datetime
 
 
-class TodoItem(TodoItemBase):
-    """TodoItem model corresponding to SysML TodoItem part def"""
-    id: UUID = Field(default_factory=uuid4)
-    status: Status = Status.PENDING
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        orm_mode = True
+@dataclass
+class TodoItemUpdates:
+    """Model for updating TodoItem"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[Status] = None

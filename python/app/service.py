@@ -1,9 +1,9 @@
+from uuid import UUID, uuid4
 from datetime import datetime
 from typing import List
-from uuid import UUID
 
-from app.models import TodoItem, Status
-from app.storage.base import TodoStorage
+from .models import TodoItem, TodoItemUpdates, Status
+from .storage.base import TodoStorage
 
 
 class TodoService:
@@ -14,14 +14,15 @@ class TodoService:
 
     async def add_todo(self, title: str, description: str) -> TodoItem:
         """Add a new TodoItem"""
-        todo_item = TodoItem(
+        todo = TodoItem(
+            id=uuid4(),
             title=title,
             description=description,
             status=Status.PENDING,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-        return await self.storage.create_todo(todo_item)
+        return await self.storage.create_todo(todo)
 
     async def get_todo(self, id: UUID) -> TodoItem:
         """Get a TodoItem by ID"""
@@ -31,17 +32,9 @@ class TodoService:
         """List all TodoItems"""
         return await self.storage.list_todos()
 
-    async def update_todo(self, id: UUID, status: Status) -> TodoItem:
+    async def update_todo(self, id: UUID, updates: TodoItemUpdates) -> TodoItem:
         """Update a TodoItem's status"""
-        # First, retrieve the existing item
-        todo_item = await self.storage.get_todo(id)
-        
-        # Update the status and updated_at fields
-        todo_item.status = status
-        todo_item.updated_at = datetime.utcnow()
-        
-        # Save the updated item
-        return await self.storage.update_todo(todo_item)
+        return await self.storage.update_todo(id, updates)
 
     async def delete_todo(self, id: UUID) -> None:
         """Delete a TodoItem by ID"""

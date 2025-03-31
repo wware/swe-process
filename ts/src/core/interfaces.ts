@@ -1,4 +1,4 @@
-import { TodoItem, CreateTodoDto, UpdateTodoDto } from './types';
+import { TodoItem, TodoItemUpdates } from './types';
 
 /**
  * TodoStorage interface as defined in SysML specification
@@ -18,7 +18,7 @@ export interface TodoStorage {
    * @param id The ID of the todo item to retrieve
    * @returns The todo item if found, otherwise null
    */
-  getTodo(id: string): Promise<TodoItem | null>;
+  getTodo(id: string): Promise<TodoItem>;
   
   /**
    * Lists all todo items
@@ -28,10 +28,11 @@ export interface TodoStorage {
   
   /**
    * Updates a todo item
-   * @param item The todo item to update
+   * @param id The ID of the todo item to update
+   * @param updates The updates to apply to the todo item
    * @returns The updated todo item
    */
-  updateTodo(item: TodoItem): Promise<TodoItem>;
+  updateTodo(id: string, updates: TodoItemUpdates): Promise<TodoItem>;
   
   /**
    * Deletes a todo item by its ID
@@ -70,11 +71,11 @@ export interface ITodoService {
   /**
    * Updates a todo item's status
    * @param id The ID of the todo item to update
-   * @param status The new status
+   * @param updates The updates to apply to the todo item
    * @returns The updated todo item
    * @throws Error if the todo item is not found
    */
-  updateTodo(id: string, status: string): Promise<TodoItem>;
+  updateTodo(id: string, updates: TodoItemUpdates): Promise<TodoItem>;
   
   /**
    * Deletes a todo item by its ID

@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 from uuid import UUID
-
-from app.models import TodoItem
+from ..models import TodoItem, TodoItemUpdates
 
 
 class TodoStorage(ABC):
@@ -24,7 +23,7 @@ class TodoStorage(ABC):
         pass
 
     @abstractmethod
-    async def update_todo(self, item: TodoItem) -> TodoItem:
+    async def update_todo(self, id: UUID, updates: TodoItemUpdates) -> TodoItem:
         """Update a TodoItem"""
         pass
 

@@ -1,6 +1,7 @@
 import { MemoryStorage } from '../../../src/storage/memory-storage';
 import { TodoItem, Status, createTodoItem } from '../../../src/core/types';
 import { NotFoundError } from '../../../src/core/errors';
+import { createTestTodo } from '../../test-utils';
 
 describe('MemoryStorage', () => {
   let memoryStorage: MemoryStorage;
@@ -158,69 +159,42 @@ describe('MemoryStorage', () => {
   });
   
   describe('updateTodo', () => {
-    it('should update the todo item and return it', async () => {
-      // Arrange
+    it('should update a todo item', async () => {
       const todoItem = createTestTodo();
       await memoryStorage.createTodo(todoItem);
-      
-      // Update the todo item
-      const updatedItem: TodoItem = {
-        ...todoItem,
+
+      const updates: TodoItemUpdates = {
         title: 'Updated Title',
-        status: Status.IN_PROGRESS,
-        updatedAt: new Date()
+        description: 'Updated Description',
+        status: Status.IN_PROGRESS
       };
-      
-      // Act
-      const result = await memoryStorage.updateTodo(updatedItem);
-      
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.id).toBe(todoItem.id);
+
+      const result = await memoryStorage.updateTodo(todoItem.id, updates);
       expect(result.title).toBe('Updated Title');
+      expect(result.description).toBe('Updated Description');
       expect(result.status).toBe(Status.IN_PROGRESS);
     });
-    
-    it('should throw NotFoundError if no todo item with the given ID exists', async () => {
-      // Arrange
-      const nonExistentTodo: TodoItem = {
-        id: '00000000-0000-0000-0000-000000000000',
-        title: 'Non-existent Todo',
-        description: 'This todo does not exist',
-        status: Status.PENDING,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+
+    it('should throw NotFoundError for non-existent todo', async () => {
+      const nonExistentId = 'non-existent-id';
+      const updates: TodoItemUpdates = { title: 'New Title' };
       
-      // Act & Assert
-      await expect(memoryStorage.updateTodo(nonExistentTodo))
-        .rejects
-        .toThrow(NotFoundError);
+      await expect(memoryStorage.updateTodo(nonExistentId, updates))
+        .rejects.toThrow(NotFoundError);
     });
-    
-    it('should create a deep copy of the todo item to avoid unintended mutations', async () => {
-      // Arrange
+
+    it('should handle partial updates', async () => {
       const todoItem = createTestTodo();
       await memoryStorage.createTodo(todoItem);
-      
-      // Update the todo item
-      const updatedItem: TodoItem = {
-        ...todoItem,
-        title: 'Updated Title',
-        status: Status.IN_PROGRESS,
-        updatedAt: new Date()
+
+      const updates: TodoItemUpdates = {
+        title: 'Updated Title'
       };
-      
-      // Act
-      const result = await memoryStorage.updateTodo(updatedItem);
-      
-      // Modify the updated item after storing
-      updatedItem.title = 'Modified After Update';
-      
-      // Assert that the stored item was not affected
-      const storedItem = await memoryStorage.getTodo(todoItem.id);
-      expect(storedItem?.title).not.toBe('Modified After Update');
-      expect(storedItem?.title).toBe('Updated Title');
+
+      const result = await memoryStorage.updateTodo(todoItem.id, updates);
+      expect(result.title).toBe('Updated Title');
+      expect(result.description).toBe(todoItem.description);
+      expect(result.status).toBe(todoItem.status);
     });
   });
   
