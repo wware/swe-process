@@ -16,7 +16,7 @@
 ## What is this all about?
 
 As software developers, we have no viable choice but to embrace
-AI-assisted software design and development. What follows in my
+AI-assisted software design and development. What follows is my
 attempt to come up with a process that produces bulletproof,
 trustworthy designs and code.
 
